@@ -1,0 +1,361 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RGBLED Lamp Demo</title>
+
+  <!-- Bootstrap -->
+  <link href="css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/slider.css" rel="stylesheet" />
+  <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+  <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+  <!--[if lt IE 9]>
+    <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+    <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+  <![endif]-->
+
+  <style>
+    #localRGB {
+      height: 20px;
+      background: rgb(128, 128, 128);
+    }
+
+    #RC .slider-selection {
+      background: #FF8282;
+    }
+
+    #RC .slider-handle {
+      background: red;
+    }
+
+    #GC .slider-selection {
+      background: #428041;
+    }
+
+    #GC .slider-handle {
+      background: green;
+    }
+
+    #BC .slider-selection {
+      background: #8283FF;
+    }
+
+    #BC .slider-handle {
+      border-bottom-color: blue;
+    }
+
+    #R, #G, #B {
+      width: 300px;
+    }
+
+    .txtInput {
+      width: 100%;
+    }
+
+    #sliderWrapper {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+
+    #ajax_loader {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 10;
+      background: url('images/black_50pct_1x1.png');
+      background-repeat: repeat;
+      display: none;
+    }
+
+    #loaderImage {
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+      max-width: 100%;
+      height: auto;
+    }
+
+    #coreLoader {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="jumbotron">
+      <h1>RGB LED Lamp Demo</h1>
+    </div>
+
+    <div id="content" class="well">
+      <div id="ids">
+        <table class="table table-condensed">
+          <tbody>
+            <tr>
+              <td>Core ID:</td>
+              <td><input type="text" id="coreId" class="txtInput" value="<ID>"></td>
+            </tr>
+            <tr>
+              <td>Access Token:</td>
+              <td><input type="text" id="accessToken" class="txtInput" value="<TOKEN>"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="sliderWrapper">
+        <div id="sliders">
+          <table class="table table-condensed">
+            <tbody>
+              <tr>
+                <td><b>R:</b></td>
+                <td><input type="text" id="R" value="" data-slider-min="0" data-slider-max="255" data-slider-step="1" data-slider-id="RC" data-slider-tooltip="hide" data-slider-handle="round"></td>
+              </tr>
+              <tr>
+                <td><b>G:</b></td>
+                <td><input type="text" id="G" value="" data-slider-min="0" data-slider-max="255" data-slider-step="1" data-slider-id="GC" data-slider-tooltip="hide" data-slider-handle="round"></td>
+              </tr>
+              <tr>
+                <td><b>B:</b></td>
+                <td><input type="text" id="B" value="" data-slider-min="0" data-slider-max="255" data-slider-step="1" data-slider-id="BC" data-slider-tooltip="hide" data-slider-handle="round"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div id='ajax_loader'>
+          <img id="loaderImage" src="images/ajax-loader.gif" />
+        </div>
+      </div>
+      <div id="colors">
+        <table class="table table-condensed">
+          <tbody>
+            <tr>
+              <td colspan="2">
+                <div id="localRGB"></div>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="2">
+                <span id="coreRgb"></span>
+                <img id="coreLoader" src="/images/coreValueLoader.gif" alt="" />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+
+  </div>
+
+  <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+  <!-- Include all compiled plugins (below), or include individual files as needed -->
+  <script src="js/bootstrap.min.js"></script>
+  <script src="js/bootstrap-slider.js"></script>
+  <script>
+
+    // The posting flag is used to make sure only a single post occurs at a time
+    var posting = false;
+
+    //The locally set red, green and blue values as set by the sliders
+    var localRed = 0;
+    var localGrn = 0;
+    var localBlu = 0;
+
+    //The RGB Values the Spark Core is currently displaying
+    //These will be retrieved from the Spark Core itself in the
+    //getValuesFromSpark() function
+    var coreRed = 0;
+    var coreGrn = 0;
+    var coreBlu = 0;
+
+    var coreId = "";
+    var accessToken = "";
+
+    //This function is called by the slider controls
+    //slideStop event
+    var onSlideStop = function () {
+
+      //If a post is already in progress, exit
+      if (posting)
+        return;
+
+      //Get the current coreId and Access token from the form fields.
+      coreId = $('#coreId').val().trim();
+      accessToken = $('#accessToken').val().trim();
+
+      //We need valid coreId and accessToken values to proceed
+      if (coreId === "" || accessToken === "") {
+        window.alert("You must supply the Spark Core's Core ID and Access Token");
+        return;
+      }
+
+      //Set the posting flag to true to prevent any parallel posts from occurring
+      posting = true;
+
+      //Retrieve the local RGB values from the slider controls
+      //And update the RGB display color
+      getLocalValuesFromSliders();
+
+      //Build the command string that will be passed to the spark core's
+      //setRgb function.  The command will be in the format of "r,g,b"
+      var command = localRed + ',' + localGrn + ',' + localBlu;
+
+      //Create the url for the spark core's setRgb function with the
+      //required coreId value.
+      var url = "https://api.spark.io/v1/devices/" + coreId + "/setRgb";
+
+      //Show the ajax_loader div to indicate that the post has begun
+      //the div overlays the slider controls and prevents the sliders
+      //from being changed while the update is in progress. This
+      $('#ajax_loader').show();
+
+      //Create a jQuery.ajax request to post the new RGB values to the setRgb function
+      $.ajax({
+        type: "POST",
+        url: url,
+        data: {
+          access_token: accessToken,
+          args: command
+        },
+      }).then(function () {
+        //Then set the posting flag to false so another post can run
+        posting = false;
+        //hide the ajax_loader div
+        $('#ajax_loader').hide();
+      });
+    };
+
+    //This function retrieves the Spark Core's rgb variable value
+    function getValuesFromSpark() {
+
+      //If a post is in progress, exit.
+      //We don't want to override the current post
+      if (posting)
+        return;
+
+      //Get the current coreId and Access token from the form fields.
+      coreId = $('#coreId').val().trim();
+      accessToken = $('#accessToken').val().trim();
+
+      //We need valid coreId and accessToken values to proceed
+      if (coreId === "" || accessToken === "") {
+        return;
+      }
+
+      //Set the url that will be posted to.  This is the URL exposed by the Spark Core
+      //via the Spark Cloud
+      var url = "https://api.spark.io/v1/devices/" + coreId + "/rgb";
+
+      //Show the "coreLoader" animated gif to give a visual clue that the update is being done
+      $('#coreLoader').show();
+
+      //Use a jQuery.ajax request to request the variable value from the URL
+      $.ajax({
+        type: "GET",
+        url: url,
+        data: {
+          access_token: accessToken
+        },
+      }).then(function (data) {
+        //Then, extract the r, g, and b values returned:
+        //The rgb variable actually returns a JSON string with the r,g,b values
+        //So we need to take the string, parse it as JSON, and extract the values
+        var rgb = $.parseJSON(data.result);
+        coreRed = rgb.r;
+        coreGrn = rgb.g;
+        coreBlu = rgb.b;
+
+        //Update the local sliders with the values retrieved from the core
+        setSliderValues(coreRed, coreGrn, coreBlu);
+
+        //Update the display of the Core's RGB values
+        $('#coreRgb').text("Core (r,g,b): (" + coreRed + "," + coreGrn + "," + coreBlu + ")");
+
+        //Hide the animated coreLoader gif to indicate the update is complete
+        $('#coreLoader').hide();
+      });
+
+      return true;
+    }
+
+    //Used to programatically set the
+    //Sliders to specific values
+    function setSliderValues(r, g, b) {
+      //Set the local slider control values to the
+      //supplied r, g, and b values
+      rSlider.setValue(r);
+      gSlider.setValue(g);
+      bSlider.setValue(b);
+
+      //Then update the local variables and the
+      //RGB display color to match the new
+      //slider values
+      getLocalValuesFromSliders();
+    }
+
+    //Retrieves the slider control values
+    //into local variables, and updates the
+    //RGB display color.
+    function getLocalValuesFromSliders() {
+      localRed = rSlider.getValue();
+      localGrn = gSlider.getValue();
+      localBlu = bSlider.getValue();
+
+      //Update localRGB color
+      $('#localRGB').css('background', 'rgb(' + localRed + ',' + localGrn + ',' + localBlu + ')')
+    }
+
+    //Function to retrieve query string parameters by name
+    //Copied from: http://stackoverflow.com/questions/901115/how-can-i-get-query-string-values-in-javascript
+    function getParameterByName(name) {
+      name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
+      var regex = new RegExp("[\\?&]" + name + "=([^&#]*)"),
+          results = regex.exec(location.search);
+      return results === null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
+    }
+
+    //Retrieve the coreId and accessToken parameters from the url query string
+    function getParameters() {
+      //Get the coreId and accessToken values
+      coreId = getParameterByName("coreId");
+      accessToken = getParameterByName("accessToken");
+
+      //Populate the form fields with the values, if any were retrieved
+      if (coreId != "") {
+        $('#coreId').val(coreId);
+      }
+      if (accessToken != "") {
+        $('#accessToken').val(accessToken);
+      }
+    }
+
+    //Initialize the slider control instances
+    //set their initial values to 0
+    //And wire up the onSlideTop method to the slideStop event
+    var rSlider = $('#R').slider({ value: 0 })
+                  .on('slideStop', onSlideStop)
+                  .data('slider');
+    var gSlider = $('#G').slider({ value: 0 })
+                  .on('slideStop', onSlideStop)
+                  .data('slider');
+    var bSlider = $('#B').slider({ value: 0 })
+                  .on('slideStop', onSlideStop)
+                  .data('slider');
+
+    //When the document is done loading
+    onload = function () {
+      //Get the coreId and accessToken from the query string (if present)
+      getParameters();
+      //Start the timer to retrieve the core's RGB values every five seconds
+      window.setInterval(function () { getValuesFromSpark(); }, 5000);
+    }
+
+  </script>
+</body>
+</html>
