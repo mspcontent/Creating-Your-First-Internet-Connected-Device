@@ -139,9 +139,8 @@ Finally, here is an example of a Common Anode RGB LED connected without the curr
 
 1. Copy the following code and paste it into the code window (replacing the code that is already there).  Note that you can also get a copy of the source code from the [rgbledlamp/rgbledlamp.cpp](./rgbledlamp/rgbledlamp.cpp) file in this repository.
 
-:
-
 	> **Note:** The code is pretty heavily documented so read through it to gain an understanding of what it does.  However, when it is deployed to the Spark Core, you will be able to call the **setRgb** function from the internet to set the R,G,B (0,0,0 - 255,255,255) color to display.  
+
 
 	````C++
 	//Set the commonType variable based on your RGB LED type
